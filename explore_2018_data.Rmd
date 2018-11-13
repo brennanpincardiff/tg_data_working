@@ -1,0 +1,178 @@
+---
+title: "TDOR_data_explore"
+author: "Paul Brennan"
+date: "12/11/2018"
+output: html_document
+---
+
+## Getting the data in...
+So I want to explore the TDOR data and try to make some visualisations.
+First step getting the data into R...
+```{r downloaded_file, eval=FALSE}
+# pull in a downloaded data file...
+data <- read.csv("../tdor_2018_01.csv")
+library(tidyverse)
+data2<- read_csv("../tdor_2018_01.csv")
+# probably slightly better - fewer factors!
+```
+
+
+Can I get it straight from bitbucket?
+```{r getting_data, eval=FALSE}
+# can I pull directly from bitbucket?
+url <- "https://bitbucket.org/annajayne/tdor_data/raw/df40d56688757b0ab388c79b8c15dd6512e3a1d7/Data/TDoR%202018/tdor_2018_01.csv"
+
+data3 <- read_csv(url)
+```
+
+Yes, this works but the url is a bit of a challenge and doesn't seem to be
+able to be made programmatically...
+
+Does a shorter url work?
+```{r shorter_bitbucket_url, eval=FALSE}
+# can I use a shorter url?
+shorter_url <- "https://bitbucket.org/annajayne/tdor_data/raw/Data/TDoR%202018/tdor_2018_01.csv"
+data4 <- read_csv(shorter_url)
+```
+
+NO!
+
+## Full download to computer and local explore
+Download all the data from [bitbucket page](https://bitbucket.org/annajayne/tdor_data/downloads/).
+The actual url for direct download is [here](https://bitbucket.org/annajayne/tdor_data/get/ff2f91a187c2.zip)
+Downloads a zip file with all the data including pictures - quite large. 
+
+I have done this but it could probably be done straight into R.
+
+Well, I will explore the 2018 data:
+```{r read_local_files, eval=FALSE}
+setwd("/Users/paulbrennan/Documents/TDOR_data_et_al/annajayne-tdor_data-ff2f91a187c2/Data/TDoR 2018")
+
+file_names <- list.files()
+file_names <- file_names[2:13]
+
+data_2018 <- lapply(file_names, read_csv)
+
+```
+This produces a Large list with 12 elements.
+
+Can I combine these into one data frame?
+```{r combine_list, eval = FALSE}
+# throws error due to age...
+data_2018_df <- bind_rows(data_2018)
+```
+
+Age of one person is a range which means that this row of data is made into a 
+character and cannot combine all into one tibble. 
+Alter age of one person
+```{r change_age, eval = FALSE}
+# throws error due to age...
+data_2018[[5]][13,2] <- 32
+data_2018[[5]]$Age <- as.integer(data_2018[[5]]$Age)
+data_2018_df <- bind_rows(data_2018)
+```
+
+Still throws an error due to similar issue in data_2018[7] and data_2018[9]
+```{r explore_age_data, eval=FALSE}
+data_2018[7]
+# Age is character
+data_2018[[7]]$Age
+# 25th row is 40-50
+# as this is a generic issue, we need to decide on a solution...
+```
+
+Possible solution:
+during import turn Age into two columns with age_lower and age_upper. 
+Following advice from [R for Data Science](https://r4ds.had.co.nz/tidy-data.html)
+```{r separate_age_and_bind_rows, eval = FALSE}
+
+data_2018[[5]]<- separate(data_2018[[5]], Age, into = c("Age", "Age_high"))
+data_2018[[5]]$Age <- as.numeric(data_2018[[5]]$Age)
+data_2018[[7]]<- separate(data_2018[[7]], Age, into = c("Age", "Age_high"))
+data_2018[[7]]$Age <- as.numeric(data_2018[[7]]$Age)
+data_2018[[9]]<- separate(data_2018[[9]], Age, into = c("Age", "Age_high"))
+data_2018[[9]]$Age <- as.numeric(data_2018[[9]]$Age)
+data_2018_df <- bind_rows(data_2018)
+# there has to be a better way to do this rather than hard coding!
+
+```
+
+Next step to explore data_2018_df
+```{r eliminate_empty_rows, eval = FALSE}
+str(data_2018_df)
+# get rid of empty rows
+data_2018_nagone <- filter(data_2018_df, Name != "NA")
+
+```
+Checking this data reveals a challenge with the March 2018 data. 
+Different name of column - date of death rather than just date and 
+date column seems to have 
+```{r explore_march_data, eval = FALSE}
+colnames(data_2018[[6]])
+# change column names
+names <- colnames(data_2018[[6]])
+names
+
+colnames(data_2018[[5]])
+names[5] <- "Date"
+
+data_2018[[6]]$Date
+# it's really Cause of death
+
+names[11] <- "Cause of death"
+names
+colnames(data_2018[[6]]) <- names
+data_2018_df <- bind_rows(data_2018)
+
+# get rid of empty rows
+data_2018_nagone <- filter(data_2018_df, Name != "NA")
+
+# get rid of empty column at end...
+data_2018_nagone$X14 <- NULL
+data <- data_2018_nagone
+```
+
+OK so this looks correct. 353 obs of 14 variables. 
+
+Make date a date using lubridate package. 
+```{r dates, eval=FALSE}
+library(lubridate)
+data$Date <- dmy(data$Date)
+```
+
+After this munging...
+Save the data...
+
+```{r save_data, eval=FALSE}
+write_csv(data, "TDOR_for_R_20181113")
+```
+
+I've put this on Github to facilitate a little visualisation
+```{r read_in_data}
+
+data <- readr::read_csv("https://raw.githubusercontent.com/brennanpincardiff/tg_data_working/master/TDOR_for_R_20181113.csv")
+```
+
+
+## Try plotting some data
+Deaths across the year
+```{r deaths_over_year}
+library(ggplot2)
+ggplot(data, aes(Date)) + geom_bar() +
+    ggtitle("Deaths across the year")
+```
+
+Deaths by age
+```{r deaths_by_age}
+ggplot(data, aes(Age)) + geom_bar() +
+    ggtitle("Deaths by age")
+```
+
+
+
+Deaths by country
+```{r deaths_by_country}
+ggplot2::ggplot(data, aes(Country)) + geom_bar() + 
+    ggtitle("Deaths by country") +
+    theme(axis.text.x = element_text(angle=45, hjust=1))
+```
